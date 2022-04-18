@@ -1,7 +1,9 @@
+import json
 from collections import deque
 from datetime import datetime, timezone
-import hashlib
-import json
+from typing import List, Union
+
+from util import hash, timestamp_is_valid, proof_of_work_is_valid, block_to_dict
 
 
 class Block(object):
@@ -15,12 +17,12 @@ class Block(object):
 
     __slots__ = ('index', 'timestamp', 'nonce', 'prev_hash', 'hash', 'data',)
 
-    def __init__(self, prev_hash: str, data: dict):
+    def __init__(self, prev_hash: str, data: dict, timestamp: str = None):
         self.index = self.nonce = 0
-        self.timestamp = datetime.now(timezone.utc).strftime("%d/%m/%Y, %H:%M:%S")
+        self.timestamp = self._timestamp_or_default(timestamp)
         self.prev_hash = prev_hash
         self.data = data
-        self.hash = hashlib.sha256(repr(self).encode()).hexdigest()
+        self.hash = hash(self)
 
     def __setattr__(self, key, value):
         """ Prevent the modification of key components of a block once set """
@@ -32,17 +34,16 @@ class Block(object):
             if key in ['timestamp', 'prev_hash', 'data']:
                 # key has already been set and modification is not allowed
                 # once set
-                raise RuntimeError(
-                    f"Key '{key}' has already been set and cannot"
-                    f" be modified.")
+                raise RuntimeError(f"Key '{key}' has already been set and "
+                                   f"cannot be modified.")
         super(Block, self).__setattr__(key, value)
 
     def __repr__(self):
         # used to serialise block for hashing
-        return f'timestamp: {self.timestamp}\n' \
-               f'nonce: {self.nonce}\n' \
-               f'previous hash: {self.prev_hash}\n' \
-               f'data: {json.dumps(self.data, sort_keys=True)}'
+        return f"timestamp:'{self.timestamp}'," \
+               f"nonce:'{self.nonce}'," \
+               f"previous hash:'{self.prev_hash}'," \
+               f"data:'{json.dumps(self.data, sort_keys=True)}'"
 
     def __str__(self):
         # used to analyse block
@@ -53,21 +54,29 @@ class Block(object):
                f'current hash: {self.hash}\n' \
                f'data: {json.dumps(self.data, sort_keys=True)}'
 
+    def _timestamp_or_default(self, timestamp: str):
+        if timestamp is None:
+            return datetime.now(timezone.utc).strftime("%d/%m/%Y, %H:%M:%S")
+        return timestamp
+
 
 class Blockchain(object):
     """
     A python based blockchain implementation.
     """
 
-    def __init__(self):
+    def __init__(self, blockchain: Union[List[dict], str] = None):
+        """
+        Initialise a blockchain with a single genesis block or build one from
+        a list of
+        :param blockchain:
+        """
         self.chain = deque()  # optimized for data accesses near its endpoints
         self.size = 0
-        self._insert_into_chain(self.genesis_block)
-
-    def add_block(self, data):
-        prev_block = self.chain[-1]
-        block = self.mine(Block(prev_hash=prev_block.hash, data=data))
-        self._insert_into_chain(block)
+        if blockchain is not None:
+            self.set_blockchain(blockchain)
+        else:
+            self.add_mined_block(self.genesis_block)
 
     @property
     def genesis_block(self):
@@ -76,59 +85,73 @@ class Blockchain(object):
             setattr(self, '_genesis_block', genesis_block)
         return getattr(self, '_genesis_block')
 
-    def hash(self, block: Block):
-        """ Get the hash value of a given block """
-        return hashlib.sha256(repr(block).encode()).hexdigest()
-
-    def is_valid(self):
-        """ is the entire chain valid """
-        prev_block = None
-        for block in self.chain:
-            if prev_block is None:
-                # first block -- check genesis block
-                if self.hash(block) != self.hash(self.genesis_block):
-                    return False
-            else:
-                if any([
-                    prev_block.hash != block.prev_hash,
-                    block.hash != self.hash(block),
-                    not self._timestamp_is_valid(block.timestamp),
-                    not self._proof_of_work_is_valid(prev_block),
-                ]):
-                    return False
-            prev_block = block
-        return True
-
-    def mine(self, block: Block):
-        # mine a fresh block
-        return block
-
-    def _timestamp_is_valid(self, timestamp: str):
-        try:
-            datetime.strptime(timestamp, "%d/%m/%Y, %H:%M:%S")
-            return True
-        except ValueError:
-            return False
-
-    def _insert_into_chain(self, block: Block):
+    def add_mined_block(self, block: Block):
+        # add a valid/mined block to the chain
         block.index = self.size
         self.size += 1
         self.chain.append(block)
 
-    def _proof_of_work_is_valid(self, block: Block):
-        # assert block passed challenge
-        if self.hash(block)[:4] == '0000':
-            return True
-        return False
+    def is_valid(self, return_size=False):
+        """
+        if `return_size` flag is set, method will return the size of the chain
+        if valid or -1 if invalid. Otherwise, simply returns `true` or `false`
+        if the chain is valid.
 
-    def proof_of_work(self, previous_proof):
-        new_proof = 1
-        check_proof = False
-        while check_proof is False:
-            hash_operation = hashlib.sha256(
-                str(new_proof ** 2 - previous_proof ** 2).encode()).hexdigest()
-            if hash_operation[:4] == '0000':
-                check_proof = True
+        :param return_size: bool
+        :return: int
+        """
+        size = self._is_valid()
+        if return_size:
+            return size
+        if size <= 0:
+            return False
+        else:
+            return True
+
+    def JSONify(self):
+        return json.dumps([block_to_dict(block) for block in self.chain])
+
+    def mine_block(self, block: Block):
+        # mine a fresh block
+        for nonce in range(2**32):
+            block.nonce = nonce
+            if proof_of_work_is_valid(block):
+                return block
+
+    def mine_data(self, data: dict):
+        # mine for a valid block using the given data and add it to the chain
+        prev_block = self.chain[-1]
+        mined_block = self.mine_block(Block(prev_hash=prev_block.hash, data=data))
+        return mined_block
+
+    def set_blockchain(self, blockchain):
+        # initialise self with the given blockchain
+        if type(blockchain) == str:
+            blockchain = json.loads(blockchain)
+        for block in blockchain:
+            b = Block(prev_hash=block['prev_hash'], data=block['data'],
+                      timestamp=block['timestamp'])
+            b.nonce = block['nonce']
+            b.hash = block['hash']
+            self.add_mined_block(b)
+
+    def _is_valid(self):
+        """
+        return the size of the chain if valid or -1 if invalid.
+        """
+        prev_block = None
+        for block in self.chain:
+            if prev_block is None:
+                # first block -- check genesis block
+                if hash(block) != hash(self.genesis_block):
+                    return -1
             else:
-                new_proof += 1
-        return new_proof
+                if any([
+                    prev_block.hash != block.prev_hash,
+                    block.hash != hash(block),
+                    not timestamp_is_valid(block.timestamp),
+                    not proof_of_work_is_valid(block),
+                ]):
+                    return -1
+            prev_block = block
+        return len(self.chain)
