@@ -1,10 +1,11 @@
+import hashlib
 import io
 import msvcrt
 import os
 import socket
-import hashlib
-from datetime import datetime, timezone
-from server import HEADER_SIZE
+from datetime import datetime
+
+HEADER_SIZE = 10
 
 
 def block_to_dict(block):
@@ -42,6 +43,7 @@ def send_message_to_node(port, msg):
 
 
 def get_blockchain_from_node(port):
+    from blockchain import Blockchain
     response = send_message_to_node(port, 'GET CHAIN')
     return Blockchain(response)
 

@@ -1,5 +1,3 @@
-**DRAFT v1.1**
-
 Proof-of-Work Based Blockchain
 ==============================
 
@@ -9,17 +7,26 @@ distribute the ledger and a flask interface to probe the network.
 Usage
 ------------
 
-.. code-block:: python
+Run the flask interface::
 
     python main.py
 
-Run the flask interface
-Run a few P2P nodes
+Run a few P2P nodes::
+
+    python server.py 5001
+    python server.py 5002
+    python server.py 5003
+
+Probe the network using the flask interface::
+
+  #todo
+
+The servers will auto synchronise to the longest valid chain
 
 Blockchain
 ----------
 
-implemented with a python deque collection as its optimised for pop/push
+implemented with a python deque collection as it's optimised for pop/push
 (perfect for blockchain)
 
 Block
@@ -28,6 +35,18 @@ Block
 Genesis Block
 _____________
 
+Origin of the blockchain. A genesis block is available
+as a property. Our genesis block is hardcoded with dummy values
+for the `timestamp`, `nonce`, `data` and `prev_hash`.
+
+.. code-block:: python
+
+    @property
+    def genesis_block(self):
+        if not hasattr(self, '_genesis_block'):
+            genesis_block = Block(prev_hash='0000', data={})
+            setattr(self, '_genesis_block', genesis_block)
+        return getattr(self, '_genesis_block')
 
 Block Fields
 ____________
@@ -47,16 +66,22 @@ ____________
 Peer-to-Peer Network
 --------------------
 
-.. image:: img/p2p_server.png
+The peer-to-peer network is comprised of multiple servers (server.py)
+interconnected using sockets and a flask interface that is used to probe
+individual nodes in the network.
 
-Every P2P node in the network will send/receive utf-8 encoded bytes where the
+.. image:: img/network.png
+
+Each node in the peer-to-peer network will subscribe itself to the list of
+running nodes in the network for as long as the server is running and unsubscribe
+itself if gracefully terminated.
+
+The nodes in the network will send/receive utf-8 encoded bytes where the
 first `10 characters` are reserved for the header and indicate the message size.
 
 .. code-block:: python
 
   valid_message = bytes('13        Valid message', 'utf-8'))
-
-Example:
 
 .. code-block:: python
 
@@ -73,4 +98,18 @@ Example:
 
 Flask API
 ---------
+
+.. code-block:: python
+
+  # Mining a new block
+  @app.route('/mine_block/<port>', methods=['POST'])
+
+  # Getting the full Blockchain
+  @app.route('/get_chain/<port>', methods=['GET'])
+
+  # Checking if the Blockchain is valid
+  @app.route('/validate/<port>', methods=['GET'])
+
+  # Shutdown a node
+  @app.route('/shutdown/<port>', methods=['GET'])
 

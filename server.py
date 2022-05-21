@@ -48,7 +48,7 @@ class P2PServer(object):
 
             if resp == 'EXITING':
                 self.log("Terminating server")
-                self.unsubscribe()  # detash self to P2P network
+                self.unsubscribe()  # detach self from the P2P network
                 exit(0)
 
     def log(self, msg):

@@ -6,8 +6,8 @@ from util import (block_to_dict, valid_post_data, send_message_to_node,
 app = Flask(__name__)
 
 
-# Mining a new block
-@app.route('/mine_block/<port>', methods=['GET'])
+
+@app.route('/mine_block/<port>', methods=['POST'])
 def mine_block(port):
     post_data = request.get_json(force=True)
     if not valid_post_data(post_data):
@@ -46,9 +46,8 @@ def validate(port):
     return jsonify(response), 200
 
 
-# Shutdown a node
 @app.route('/shutdown/<port>', methods=['GET'])
-def validate(port):
+def shutdown(port):
     response = send_message_to_node(port, 'SHUTDOWN')
     if response == 'EXITING':
         return jsonify({'message': 'server is shutdown'}, 200)
@@ -60,4 +59,8 @@ if __name__ == '__main__':
 
     app.run(host='0.0.0.0', port=8080, debug=True)
 
-
+    # Udemy - Build a Blockchain and a Cryptocurrency from Scratch
+    # 027 Handle Messages from Peers.mp4
+    # 027 Handle Messages from Peers.mp4
+    # 027 Handle Messages from Peers.mp4
+    # 027 Handle Messages from Peers.mp4
