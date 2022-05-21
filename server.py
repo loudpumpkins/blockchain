@@ -161,11 +161,3 @@ if __name__ == '__main__':
         print(f"{datetime.datetime.today()} :: 'Port' argument is not a valid "
               f"integer. Try 'python server.py 6001'.")
         exit(1)
-
-
-
-
-PADDING = 10
-
-msg = "Welcome to the server!"
-msg = f'{len(msg):<{PADDING}}{msg}'
